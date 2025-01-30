@@ -1,0 +1,3 @@
+name = "haixing_porxy"
+main = "src/index.js"
+compatibility_date = "2025-01-30"
