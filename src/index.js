@@ -12,6 +12,7 @@ export default {
 	async fetch(request, env, ctx) {
 
 		const url = new URL(request.url)
+
 		const targetUrl = url.searchParams.get('url')
 
 		if (!targetUrl) {
@@ -24,29 +25,36 @@ export default {
 		}
 
 		try {
-			// 发送GET请求
-			const response = await fetch(targetUrl, { headers })
-			const bodyText = await response.text()
 
-			// 使用正则表达式匹配playAddr
-			const match = bodyText.match(/"playAddr":{.*?}/s)
-			if (match) {
-				const playAddrJsonStr = match[0]
-				const playAddrJson = JSON.parse('{' + playAddrJsonStr + '}')
-
-				// 提取视频链接
-				const videoUrl = playAddrJson.playAddr.ori_m3u8
-				if (videoUrl) {
-					// 重定向到视频地址
-					return Response.redirect(videoUrl, 302)
-				} else {
-					return new Response('Error: Video URL not found in the response.', { status: 404 })
-				}
+			if (targetUrl.indexOf('bilibili.com') != -1) {
+				return Response.redirect('https://biliplayer.91vrchat.com/player/?url=' + targetUrl, 302)
 			} else {
-				return new Response('Error: No playAddr JSON object found in the HTML.', { status: 404 })
+				// 发送GET请求
+				const response = await fetch(targetUrl, { headers })
+				const bodyText = await response.text()
+
+				// 使用正则表达式匹配playAddr
+				const match = bodyText.match(/"playAddr":{.*?}/s)
+				if (match) {
+					const playAddrJsonStr = match[0]
+					const playAddrJson = JSON.parse('{' + playAddrJsonStr + '}')
+
+					// 提取视频链接
+					const videoUrl = playAddrJson.playAddr.ori_m3u8
+					if (videoUrl) {
+						// 重定向到视频地址
+						return Response.redirect(videoUrl, 302)
+					} else {
+						return new Response('Error: Video URL not found in the response.', { status: 404 })
+					}
+				} else {
+					return new Response('Error: No playAddr JSON object found in the HTML.', { status: 404 })
+				}
 			}
+
 		} catch (error) {
 			return new Response(`An error occurred: ${error}`, { status: 500 })
 		}
-	},
+	}
+
 };
