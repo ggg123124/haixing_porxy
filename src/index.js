@@ -28,7 +28,7 @@ export default {
 
 
 			if (targetUrl.indexOf('bilibili.com') != -1) {
-				return Response.redirect('https://biliplayer.91vrchat.com/player/?url=' + targetUrl, 302)
+				return Response.redirect('https://jx.91vrchat.com/bl/?url=' + targetUrl, 302)
 			} else {
 				// 发送GET请求 构建
 				const response = await fetch(targetUrl, { headers })
