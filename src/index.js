@@ -114,16 +114,32 @@ export default {
 
 		if (!bvId) throw new Error("无法提取视频编号");
 
+		// 设置 B站 API 请求头
+		const biliHeaders = {
+			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+			'Referer': 'https://www.bilibili.com/',
+			'Origin': 'https://www.bilibili.com',
+			'Accept': 'application/json, text/plain, */*',
+			'Accept-Language': 'zh-CN,zh;q=0.9',
+			'Accept-Encoding': 'gzip, deflate, br',
+			'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+			'Sec-Ch-Ua-Mobile': '?0',
+			'Sec-Ch-Ua-Platform': '"Windows"',
+			'Sec-Fetch-Dest': 'empty',
+			'Sec-Fetch-Mode': 'cors',
+			'Sec-Fetch-Site': 'same-site'
+		};
+
 		// 获取 cid
 		const infoUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvId}`;
-		const infoRes = await fetch(infoUrl);
+		const infoRes = await fetch(infoUrl, { headers: biliHeaders });
 		const videoData = await infoRes.json();
 		const cid = videoData.data?.cid;
 		if (!cid) throw new Error("获取 cid 失败");
 
 		// 获取播放地址（qn=80 表示高清 1080P，可根据需要调整）
 		const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvId}&cid=${cid}&qn=116&type=&otype=json&platform=html5&high_quality=1`;
-		const playRes = await fetch(playUrl);
+		const playRes = await fetch(playUrl, { headers: biliHeaders });
 		const playData = await playRes.json();
 		const videoUrl = playData.data.durl[0].url;
 
