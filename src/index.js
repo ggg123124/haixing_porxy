@@ -114,34 +114,62 @@ export default {
 
 		if (!bvId) throw new Error("无法提取视频编号");
 
-		// 设置 B站 API 请求头
+		// 设置 B站 API 请求头（更完整的浏览器特征）
 		const biliHeaders = {
 			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-			'Referer': 'https://www.bilibili.com/',
-			'Origin': 'https://www.bilibili.com',
+			'Referer': `https://www.bilibili.com/video/${bvId}`,
 			'Accept': 'application/json, text/plain, */*',
-			'Accept-Language': 'zh-CN,zh;q=0.9',
+			'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
 			'Accept-Encoding': 'gzip, deflate, br',
+			'Connection': 'keep-alive',
+			'DNT': '1',
 			'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
 			'Sec-Ch-Ua-Mobile': '?0',
 			'Sec-Ch-Ua-Platform': '"Windows"',
 			'Sec-Fetch-Dest': 'empty',
 			'Sec-Fetch-Mode': 'cors',
-			'Sec-Fetch-Site': 'same-site'
+			'Sec-Fetch-Site': 'same-site',
+			'Cache-Control': 'no-cache',
+			'Pragma': 'no-cache'
 		};
 
-		// 获取 cid
+		// 获取 cid（使用更宽松的 API 端点）
 		const infoUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvId}`;
-		const infoRes = await fetch(infoUrl, { headers: biliHeaders });
+		const infoRes = await fetch(infoUrl, { 
+			headers: biliHeaders,
+			cf: {
+				// Cloudflare Workers 特性：缓存和重试策略
+				cacheTtl: 300,
+				cacheEverything: true
+			}
+		});
 		const videoData = await infoRes.json();
+		
+		// 检查响应状态
+		if (videoData.code !== 0) {
+			throw new Error(`B站API错误: ${videoData.message || '获取视频信息失败'}`);
+		}
+		
 		const cid = videoData.data?.cid;
 		if (!cid) throw new Error("获取 cid 失败");
 
-		// 获取播放地址（qn=80 表示高清 1080P，可根据需要调整）
-		const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvId}&cid=${cid}&qn=116&type=&otype=json&platform=html5&high_quality=1`;
-		const playRes = await fetch(playUrl, { headers: biliHeaders });
+		// 获取播放地址（使用 qn=64 中等清晰度，更不容易触发风控）
+		const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvId}&cid=${cid}&qn=64&fnval=0&fnver=0&fourk=0`;
+		const playRes = await fetch(playUrl, { 
+			headers: biliHeaders,
+			cf: {
+				cacheTtl: 300,
+				cacheEverything: true
+			}
+		});
 		const playData = await playRes.json();
-		const videoUrl = playData.data.durl[0].url;
+		
+		// 检查播放地址响应
+		if (playData.code !== 0) {
+			throw new Error(`B站播放API错误: ${playData.message || '获取播放地址失败'}`);
+		}
+		
+		const videoUrl = playData.data?.durl?.[0]?.url;
 
 		if (!videoUrl) throw new Error("无法获取视频直链");
 
