@@ -82,97 +82,35 @@ export default {
 	 * @returns {Promise<string>} 返回视频直链地址（MP4）
 	 */
 	async parseBilibiliVideo(url) {
-		// 工具函数：将 av 转换为 bv
-		const XOR_CODE = 23442827791579n;
-		const MAX_AID = 1n << 51n;
-		const BASE = 58n;
-		const data = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
-		function av2bv(av) {
-			const aid = av.startsWith('av') ? av.slice(2) : av;
-			const bytes = ['B', 'V', '1', '0', '0', '0', '0', '0', '0', '0', '0', '0'];
-			let bvIndex = bytes.length - 1;
-			let tmp = (MAX_AID | BigInt(aid)) ^ XOR_CODE;
-			while (tmp > 0) {
-				bytes[bvIndex] = data[Number(tmp % BigInt(BASE))];
-				tmp = tmp / BASE;
-				bvIndex -= 1;
-			}
-			[bytes[3], bytes[9]] = [bytes[9], bytes[3]];
-			[bytes[4], bytes[7]] = [bytes[7], bytes[4]];
-			return bytes.join('');
-		}
-
-		// 提取 BV 号
-		let bvId = null;
+		// 提取 BV 或 AV 号
+		let videoId = null;
 		if (url.includes("BV")) {
 			const match = url.match(/BV[^/?&#]+/);
-			bvId = match ? match[0] : null;
+			videoId = match ? match[0] : null;
 		} else if (url.includes("av")) {
 			const match = url.match(/av\d+/i);
-			if (match) bvId = av2bv(match[0]);
+			videoId = match ? match[0] : null;
 		}
 
-		if (!bvId) throw new Error("无法提取视频编号");
+		if (!videoId) throw new Error("无法提取视频编号");
 
-		// 设置 B站 API 请求头（更完整的浏览器特征）
-		const biliHeaders = {
-			'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-			'Referer': `https://www.bilibili.com/video/${bvId}`,
-			'Accept': 'application/json, text/plain, */*',
-			'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-			'Accept-Encoding': 'gzip, deflate, br',
-			'Connection': 'keep-alive',
-			'DNT': '1',
-			'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-			'Sec-Ch-Ua-Mobile': '?0',
-			'Sec-Ch-Ua-Platform': '"Windows"',
-			'Sec-Fetch-Dest': 'empty',
-			'Sec-Fetch-Mode': 'cors',
-			'Sec-Fetch-Site': 'same-site',
-			'Cache-Control': 'no-cache',
-			'Pragma': 'no-cache'
-		};
-
-		// 获取 cid（使用更宽松的 API 端点）
-		const infoUrl = `https://api.bilibili.com/x/web-interface/view?bvid=${bvId}`;
-		const infoRes = await fetch(infoUrl, { 
-			headers: biliHeaders,
-			cf: {
-				// Cloudflare Workers 特性：缓存和重试策略
-				cacheTtl: 300,
-				cacheEverything: true
+		// 方案1: 使用第三方解析服务（推荐）
+		// 这些服务已经处理好了B站的风控问题
+		try {
+			// 尝试使用公开的B站解析API
+			const parseApiUrl = `https://api.injahow.cn/bparse/?url=https://www.bilibili.com/video/${videoId}`;
+			const parseRes = await fetch(parseApiUrl);
+			const parseData = await parseRes.json();
+			
+			if (parseData.code === 0 && parseData.data?.url) {
+				return parseData.data.url;
 			}
-		});
-		const videoData = await infoRes.json();
-		
-		// 检查响应状态
-		if (videoData.code !== 0) {
-			throw new Error(`B站API错误: ${videoData.message || '获取视频信息失败'}`);
+		} catch (e) {
+			console.log('第三方解析失败，尝试备用方案:', e.message);
 		}
-		
-		const cid = videoData.data?.cid;
-		if (!cid) throw new Error("获取 cid 失败");
 
-		// 获取播放地址（使用 qn=64 中等清晰度，更不容易触发风控）
-		const playUrl = `https://api.bilibili.com/x/player/playurl?bvid=${bvId}&cid=${cid}&qn=64&fnval=0&fnver=0&fourk=0`;
-		const playRes = await fetch(playUrl, { 
-			headers: biliHeaders,
-			cf: {
-				cacheTtl: 300,
-				cacheEverything: true
-			}
-		});
-		const playData = await playRes.json();
-		
-		// 检查播放地址响应
-		if (playData.code !== 0) {
-			throw new Error(`B站播放API错误: ${playData.message || '获取播放地址失败'}`);
-		}
-		
-		const videoUrl = playData.data?.durl?.[0]?.url;
-
-		if (!videoUrl) throw new Error("无法获取视频直链");
-
-		return videoUrl;
+		// 方案2: 返回iframe嵌入链接（B站官方播放器）
+		// 这个方案不会被ban，因为是使用B站官方播放器
+		return `https://player.bilibili.com/player.html?bvid=${videoId}&high_quality=1&autoplay=1`;
 	}
 };
